@@ -11,48 +11,55 @@ import com.pusher.client.PusherOptions
 import com.pusher.client.connection.ConnectionEventListener
 import com.pusher.client.connection.ConnectionState
 import com.pusher.client.connection.ConnectionStateChange
-import com.pusher.client.channel.Channel
+import com.pusher.client.channel.ChannelEventListener
 import com.pusher.client.channel.PrivateChannelEventListener
-import com.pusher.client.channel.SubscriptionEventListener
 import com.pusher.client.util.HttpAuthorizer
 import io.flutter.plugin.common.EventChannel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.lang.Exception
 
-class PusherPlugin: MethodCallHandler, ConnectionEventListener {
+class PusherPlugin : MethodCallHandler, ConnectionEventListener {
     var pusher: Pusher? = null
-    val connectionStreamHandler = ConnectionStreamHandler()
-    val messageStreamHandler = MessageStreamHandler()
-    val errorStreamHandler = ErrorStreamHandler()
+    val eventStreamHandler = MessageStreamHandler()
 
     companion object {
         @JvmStatic
         fun registerWith(registrar: Registrar) {
             val instance = PusherPlugin()
             val channel = MethodChannel(registrar.messenger(), "flutter.jeroengovers.nl/pusher")
-                channel.setMethodCallHandler(instance)
+            channel.setMethodCallHandler(instance)
 
-            val connectionEventChannel = EventChannel(registrar.messenger(), "flutter.jeroengovers.nl/pusher/connection")
-                connectionEventChannel.setStreamHandler(instance.connectionStreamHandler)
-
-            val messageEventChannel = EventChannel(registrar.messenger(),"flutter.jeroengovers.nl/pusher/message")
-                messageEventChannel.setStreamHandler(instance.messageStreamHandler)
+            val messageEventChannel = EventChannel(registrar.messenger(), "flutter.jeroengovers.nl/pusher/event")
+            messageEventChannel.setStreamHandler(instance.eventStreamHandler)
         }
     }
 
     override fun onConnectionStateChange(change: ConnectionStateChange) {
-        connectionStreamHandler.sendState(change.currentState)
+        var socketId: String = ""
+
+        if (change.currentState == ConnectionState.CONNECTED) {
+            socketId = pusher?.getConnection()?.socketId.toString();
+        }
+
+        eventStreamHandler.send("_connection",
+                "state",
+                "change",
+                JSONObject(mapOf(
+                        "socketId" to socketId,
+                        "state" to change.currentState.toString().toLowerCase())).toString()
+        )
     }
 
     override fun onError(message: String?, code: String?, e: Exception?) {
         e?.printStackTrace()
         val errMessage = message ?: e?.localizedMessage ?: "Unknown error"
-        this.errorStreamHandler.send(code ?: "", errMessage)
+
+        eventStreamHandler.send("_connection", "error", "error", JSONObject(mapOf("code" to code, "message" to errMessage)).toString())
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        val unit = when (call.method) {
+        when (call.method) {
             "create" -> {
                 val apiKey = call.argument<String>("apiKey")
 
@@ -109,9 +116,19 @@ class PusherPlugin: MethodCallHandler, ConnectionEventListener {
                 }
 
                 pusher = Pusher(apiKey, pusherOptions)
+
+                result.success(null)
             }
             "connect" -> {
                 pusher?.connect(this, ConnectionState.ALL)
+
+                result.success(null)
+            }
+            "disconnect" -> {
+                pusher?.disconnect()
+                pusher = null
+
+                result.success(null)
             }
             "subscribe" -> {
                 val pusher = this.pusher ?: return
@@ -121,17 +138,28 @@ class PusherPlugin: MethodCallHandler, ConnectionEventListener {
                         ?: throw RuntimeException("Must provide channel")
                 var channel = pusher.getChannel(channelName)
                 if (channel == null) {
-                    channel = pusher.subscribe(channelName)
+                    channel = pusher.subscribe(channelName, object : ChannelEventListener {
+                        override fun onSubscriptionSucceeded(channelName: String?) {
+                            Log.d("subscribe", "subscription-succeeded")
+                            //TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        }
+
+                        override fun onEvent(channelName: String?, eventName: String?, data: String?) {
+                            Log.e("subscribe", "onEvent - not used!?")
+                        }
+                    })
                 }
                 channel.bind(event) { _, eventName, data ->
-                    messageStreamHandler.send(channel.name, eventName, data)
+                    eventStreamHandler.send(channel.name, "event", eventName, data)
                 }
                 result.success(null)
             }
             "subscribePrivate" -> {
                 val pusher = this.pusher ?: return
-                val event = call.argument<String>("event") ?: throw RuntimeException("Must provide event name")
-                val channelName = call.argument<String>("channel") ?: throw RuntimeException("Must provide channel")
+                val event = call.argument<String>("event")
+                        ?: throw RuntimeException("Must provide event name")
+                val channelName = call.argument<String>("channel")
+                        ?: throw RuntimeException("Must provide channel")
 
                 var channel = pusher.getPrivateChannel(channelName)
                 if (channel == null) {
@@ -141,11 +169,14 @@ class PusherPlugin: MethodCallHandler, ConnectionEventListener {
                             Log.d("onAuthenticationFailure", string)
                             Log.d("onAuthenticationFailure", ex.toString())
                         }
+
                         override fun onSubscriptionSucceeded(string: String) {
                             Log.d("firstSubscribePrivate", "onSubscriptionSucceeded")
                         }
+
                         override fun onEvent(string: String, eventName: String, data: String) {
-                            messageStreamHandler.send(channel.name, eventName, data)
+                            Log.d("channel-null", "onEvent-null")
+                            eventStreamHandler.send(channel.name, "event", eventName, data)
                         }
                     })
                 }
@@ -154,11 +185,14 @@ class PusherPlugin: MethodCallHandler, ConnectionEventListener {
                     override fun onAuthenticationFailure(string: String, ex: Exception) {
                         Log.d("subscribePrivate", "onAuthenticationFailure")
                     }
+
                     override fun onSubscriptionSucceeded(string: String) {
                         Log.d("subscribePrivate", "onSubscriptionSucceeded")
                     }
+
                     override fun onEvent(string: String, eventName: String, data: String) {
-                        messageStreamHandler.send(channel.name, eventName, data)
+                        Log.d("channel-bind", "onEvent-bind")
+                        eventStreamHandler.send(channel.name, "event", eventName, data)
                     }
                 })
                 result.success(null)
@@ -166,9 +200,12 @@ class PusherPlugin: MethodCallHandler, ConnectionEventListener {
             "trigger" -> {
                 val pusher = this.pusher ?: return
 
-                val channelName = call.argument<String>("channel") ?: throw RuntimeException("Must provide channel")
-                val event = call.argument<String>("event") ?: throw RuntimeException("Must provide event name")
-                val data = call.argument<String>("data") ?: throw RuntimeException("Must provide data")
+                val channelName = call.argument<String>("channel")
+                        ?: throw RuntimeException("Must provide channel")
+                val event = call.argument<String>("event")
+                        ?: throw RuntimeException("Must provide event name")
+                val data = call.argument<String>("data")
+                        ?: throw RuntimeException("Must provide data")
 
                 val channel = pusher.getPrivateChannel(channelName)
                 channel.trigger(event, data)
@@ -178,54 +215,24 @@ class PusherPlugin: MethodCallHandler, ConnectionEventListener {
     }
 }
 
-class ConnectionStreamHandler : EventChannel.StreamHandler {
-    private var eventSink: EventChannel.EventSink? = null
-    override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
-        eventSink = sink
-    }
-
-    fun sendState(state: ConnectionState) {
-        eventSink?.success(state.toString().toLowerCase())
-    }
-
-    override fun onCancel(p0: Any?) {
-        eventSink = null
-    }
-}
-
 class MessageStreamHandler : EventChannel.StreamHandler {
     private var eventSink: EventChannel.EventSink? = null
     override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
         eventSink = sink
     }
 
-    fun send(channel: String, event: String, data: Any) {
-        val json = JSONObject(data as String)
-        val map = jsonToMap(json)
+    fun send(channel: String, type: String, event: String, data: String) {
         eventSink?.success(mapOf("channel" to channel,
+                "type" to type,
                 "event" to event,
-                "body" to map))
+                "body" to data))
     }
 
     override fun onCancel(p0: Any?) {
         eventSink = null
     }
 }
-class ErrorStreamHandler : EventChannel.StreamHandler {
-    private var eventSink: EventChannel.EventSink? = null
-    override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
-        eventSink = sink
-    }
 
-    fun send(code : String, message : String) {
-        val errCode = try { code.toInt() } catch (e : NumberFormatException) { 0 }
-        eventSink?.success(mapOf("code" to errCode, "message" to message))
-    }
-
-    override fun onCancel(p0: Any?) {
-        eventSink = null
-    }
-}
 fun jsonToMap(json: JSONObject?): Map<String, Any> {
     var retMap: Map<String, Any> = HashMap()
 
