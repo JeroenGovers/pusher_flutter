@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-class ConnectionLog with ChangeNotifier {
+class ConnectionLogNotifier with ChangeNotifier {
   List _list = [];
 
   List get list => _list;

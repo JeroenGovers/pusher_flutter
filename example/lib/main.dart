@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
-
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:pusher/pusher.dart';
 import 'package:pusher_example/public_channel.dart';
 
+import 'change_notifiers/public_channel.dart';
 import 'change_notifiers/pusher_state.dart';
 import 'change_notifiers/connection_log.dart';
 import 'connection.dart';
@@ -33,7 +31,6 @@ class MyAppWidget extends StatefulWidget {
 
 class _MyAppState extends State<MyAppWidget> {
   int _selectedIndex = 0;
-  PusherConnectionState _connectionState;
   String _latestMessage;
   String _lastError;
 
@@ -87,159 +84,160 @@ class _MyAppState extends State<MyAppWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      builder: (context) => PusherState(),
-      child: ChangeNotifierProvider(
-        builder: (context) => ConnectionLog(),
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Pusher example app'),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(builder: (context) => PusherStateNotifier()),
+        ChangeNotifierProvider(builder: (context) => ConnectionLogNotifier()),
+        ChangeNotifierProvider(builder: (context) => PublicChannelProvider()),
+      ],
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Pusher example app'),
+        ),
+        body: Center(
+          child: Flex(
+            direction: Axis.vertical,
+            children: <Widget>[
+              Visibility(
+                visible: _selectedIndex == 0,
+                child: Expanded(
+                  child: Connection(),
+                ),
+              ),
+              Visibility(
+                visible: _selectedIndex == 1,
+                child: Expanded(
+                  child: PublicChannel(),
+                ),
+              ),
+              Visibility(
+                visible: _selectedIndex == 2,
+                child: Text("error $_lastError"),
+              ),
+              Visibility(
+                visible: _selectedIndex == 3,
+                child: Text("message $_latestMessage"),
+              ),
+              Visibility(
+                visible: _selectedIndex == 4,
+                child: MaterialButton(
+                  child: Text("Send data"),
+                  onPressed: () {
+                    // pusher.trigger(
+                    //     'private-sprinklers',
+                    //     'client-updateSprinkler',
+                    //     '{"id":1,"name":"Sproeiers3","status":true}');
+                  },
+                ),
+              ),
+            ],
           ),
-          body: Center(
-            child: Flex(
-              direction: Axis.vertical,
-              children: <Widget>[
-                Visibility(
-                  visible: _selectedIndex == 0,
-                  child: Expanded(
-                    child: Connection(),
-                  ),
-                ),
-                Visibility(
-                  visible: _selectedIndex == 1,
-                  child: Expanded(
-                    child: PublicChannel(),
-                  ),
-                ),
-                Visibility(
-                  visible: _selectedIndex == 2,
-                  child: Text("error $_lastError"),
-                ),
-                Visibility(
-                  visible: _selectedIndex == 3,
-                  child: Text("message $_latestMessage"),
-                ),
-                Visibility(
-                  visible: _selectedIndex == 4,
-                  child: MaterialButton(
-                    child: Text("Send data"),
-                    onPressed: () {
-                      // pusher.trigger(
-                      //     'private-sprinklers',
-                      //     'client-updateSprinkler',
-                      //     '{"id":1,"name":"Sproeiers3","status":true}');
+        ),
+        bottomNavigationBar: Consumer<PusherStateNotifier>(
+          builder: (context, state, _) {
+            bool active = false;
+            IconData connectionIcon = Icons.signal_cellular_off;
+            Color buttonColor = Colors.grey[200];
+
+            switch (state.state) {
+              case PusherConnectionState.connecting:
+              case PusherConnectionState.reconnecting:
+              case PusherConnectionState.disconnecting:
+              case PusherConnectionState.reconnectingWhenNetworkBecomesReachable:
+                connectionIcon = Icons.signal_cellular_null;
+
+                break;
+              case PusherConnectionState.reconnectingWhenNetworkBecomesReachable:
+                connectionIcon = Icons.signal_cellular_connected_no_internet_4_bar;
+
+                break;
+              case PusherConnectionState.connected:
+                connectionIcon = Icons.signal_cellular_4_bar;
+                buttonColor = null;
+                active = true;
+
+                break;
+              default:
+            }
+
+            return BottomNavigationBar(
+              items: [
+                BottomNavigationBarItem(
+                  icon: Consumer<ConnectionLogNotifier>(
+                    builder: (BuildContext context, ConnectionLogNotifier log, Widget child) {
+                      return IconIndicator(
+                        connectionIcon,
+                        number: log.newLength,
+                      );
                     },
+                  ),
+                  title: Text('Connection'),
+                ),
+                BottomNavigationBarItem(
+                  icon: IconIndicator(
+                    Icons.sms,
+                    number: 0,
+                    disabled: !active,
+                  ),
+                  title: Text(
+                    'Public',
+                    style: TextStyle(
+                      color: buttonColor,
+                    ),
+                  ),
+                ),
+                BottomNavigationBarItem(
+                  icon: IconIndicator(
+                    Icons.sms_failed,
+                    number: 0,
+                    disabled: !active,
+                  ),
+                  title: Text(
+                    'Private',
+                    style: TextStyle(
+                      color: buttonColor,
+                    ),
+                  ),
+                ),
+                BottomNavigationBarItem(
+                  icon: IconIndicator(
+                    Icons.view_list,
+                    number: 0,
+                    disabled: !active,
+                  ),
+                  title: Text(
+                    'Presence',
+                    style: TextStyle(
+                      color: buttonColor,
+                    ),
+                  ),
+                ),
+                BottomNavigationBarItem(
+                  icon: IconIndicator(
+                    Icons.send,
+                    disabled: !active,
+                  ),
+                  title: Text(
+                    'Trigger',
+                    style: TextStyle(
+                      color: buttonColor,
+                    ),
                   ),
                 ),
               ],
-            ),
-          ),
-          bottomNavigationBar: Consumer<PusherState>(
-            builder: (context, state, _) {
-              bool active = false;
-              IconData connectionIcon = Icons.signal_cellular_off;
-              Color buttonColor = Colors.grey[200];
-
-              switch (state.state) {
-                case PusherConnectionState.connecting:
-                case PusherConnectionState.reconnecting:
-                case PusherConnectionState.disconnecting:
-                case PusherConnectionState.reconnectingWhenNetworkBecomesReachable:
-                  connectionIcon = Icons.signal_cellular_null;
-
-                  break;
-                case PusherConnectionState.reconnectingWhenNetworkBecomesReachable:
-                  connectionIcon = Icons.signal_cellular_connected_no_internet_4_bar;
-
-                  break;
-                case PusherConnectionState.connected:
-                  connectionIcon = Icons.signal_cellular_4_bar;
-                  buttonColor = null;
-                  active = true;
-
-                  break;
-                default:
-              }
-
-              return BottomNavigationBar(
-                items: [
-                  BottomNavigationBarItem(
-                    icon: Consumer<ConnectionLog>(
-                      builder: (BuildContext context, ConnectionLog log, Widget child) {
-                        return IconIndicator(
-                          connectionIcon,
-                          number: log.newLength,
-                        );
-                      },
-                    ),
-                    title: Text('Connection'),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: IconIndicator(
-                      Icons.sms,
-                      number: 0,
-                      disabled: !active,
-                    ),
-                    title: Text(
-                      'Public',
-                      style: TextStyle(
-                        color: buttonColor,
-                      ),
-                    ),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: IconIndicator(
-                      Icons.sms_failed,
-                      number: 0,
-                      disabled: !active,
-                    ),
-                    title: Text(
-                      'Private',
-                      style: TextStyle(
-                        color: buttonColor,
-                      ),
-                    ),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: IconIndicator(
-                      Icons.view_list,
-                      number: 0,
-                      disabled: !active,
-                    ),
-                    title: Text(
-                      'Presence',
-                      style: TextStyle(
-                        color: buttonColor,
-                      ),
-                    ),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: IconIndicator(
-                      Icons.send,
-                      disabled: !active,
-                    ),
-                    title: Text(
-                      'Trigger',
-                      style: TextStyle(
-                        color: buttonColor,
-                      ),
-                    ),
-                  ),
-                ],
-                currentIndex: _selectedIndex,
-                unselectedItemColor: Colors.grey,
-                selectedItemColor: Colors.amber[800],
-                type: BottomNavigationBarType.fixed,
-                onTap: (int index) {
-                  if (index == 0 || active) {
-                    setState(() {
-                      _selectedIndex = index;
-                    });
-                  }
-                },
-              );
-            },
-          ),
+              currentIndex: _selectedIndex,
+              unselectedItemColor: Colors.grey,
+              selectedItemColor: Colors.amber[800],
+              type: BottomNavigationBarType.fixed,
+              onTap: (int index) {
+                if (index == 0 || active) {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                }
+              },
+            );
+          },
         ),
       ),
     );

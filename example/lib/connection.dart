@@ -24,8 +24,8 @@ class _Connection extends State<Connection> {
   }
 
   void connect() {
-    final state = Provider.of<PusherState>(context);
-    final log = Provider.of<ConnectionLog>(context);
+    final state = Provider.of<PusherStateNotifier>(context);
+    final log = Provider.of<ConnectionLogNotifier>(context);
 
     globals.pusher = new Pusher(
       apiKey: connection_values.apiKey ?? connection_initials.apiKey,
@@ -54,7 +54,7 @@ class _Connection extends State<Connection> {
   }
 
   Widget button() {
-    return Consumer<PusherState>(builder: (context, state, _) {
+    return Consumer<PusherStateNotifier>(builder: (context, state, _) {
       String text;
       Color color = Colors.amber;
       Function onPressed = disconnect;
@@ -277,7 +277,7 @@ class _Connection extends State<Connection> {
           Card(
             child: ListTile(
               title: Text('State'),
-              subtitle: Consumer<PusherState>(
+              subtitle: Consumer<PusherStateNotifier>(
                 builder: (context, pusherState, _) {
                   return Text(pusherState.state.toString());
                 },
@@ -287,7 +287,7 @@ class _Connection extends State<Connection> {
           Card(
             child: ListTile(
               title: Text('SocketId'),
-              subtitle: Consumer<PusherState>(
+              subtitle: Consumer<PusherStateNotifier>(
                 builder: (context, state, _) {
                   String socketId = '';
                   if (globals.pusher != null) {
@@ -316,8 +316,8 @@ class _Connection extends State<Connection> {
                 horizontal: 4,
                 vertical: 8,
               ),
-              child: Consumer<ConnectionLog>(
-                builder: (context, ConnectionLog log, _) {
+              child: Consumer<ConnectionLogNotifier>(
+                builder: (context, ConnectionLogNotifier log, _) {
                   List <Widget>list = [];
 
                   log.list.forEach((message) {

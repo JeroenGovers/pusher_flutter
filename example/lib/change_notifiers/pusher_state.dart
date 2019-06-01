@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:pusher/pusher.dart';
 
-class PusherState with ChangeNotifier{
+class PusherStateNotifier with ChangeNotifier{
   PusherConnectionState _state = PusherConnectionState.disconnected;
 
   PusherConnectionState get state => _state;
