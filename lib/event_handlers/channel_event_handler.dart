@@ -5,9 +5,8 @@ class ChannelEventHandler implements PusherEventHandler {
   void handle(
     Pusher pusher,
     String channelName,
-    String type,
     String event,
-    String body,
+    Map body,
     Function function,
   ) {
     function(new PusherMessage(channelName, event, body));

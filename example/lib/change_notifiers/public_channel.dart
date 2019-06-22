@@ -12,12 +12,17 @@ class PublicChannelProvider with ChangeNotifier{
     }
     if(!_map[channelName].containsKey(event)){
       _map[channelName][event] = [];
-    }
 
-    notifyListeners();
+      notifyListeners();
+    }
   }
-  void remove(String channelName, String event) {
-    _map[channelName].remove(event);
+  void remove(String channelName, {String event}) {
+    if(event != null){
+      _map[channelName].remove(event);
+    }
+    else{
+      _map[channelName] = {};
+    }
 
     if(_map[channelName].length == 0){
       _map.remove(channelName);

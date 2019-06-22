@@ -1,8 +1,7 @@
-import 'dart:convert';
 import '../pusher.dart';
 import 'pusher_event_handler.dart';
 
-class ConnectionError implements PusherEventHandler {
+class ChannelStateChange implements PusherEventHandler {
   void handle(
     Pusher pusher,
     String channelName,
@@ -10,6 +9,6 @@ class ConnectionError implements PusherEventHandler {
     Map body,
     Function function,
   ) {
-    function(PusherError(body['code'], body['message']));
+    function(new PusherMessage(channelName, event, body));
   }
 }

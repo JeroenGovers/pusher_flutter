@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
+import 'package:pusher/channels/public.dart';
+import 'package:pusher/pusher.dart';
+import 'global_values/pusher.dart' as globals;
 
 import 'change_notifiers/public_channel.dart';
 
-class PublicChannel extends StatefulWidget {
-  PublicChannel({Key key}) : super(key: key);
+class PublicChannelView extends StatefulWidget {
+  PublicChannelView({Key key}) : super(key: key);
 
   @override
   _PublicChannel createState() => _PublicChannel();
 }
 
-class _PublicChannel extends State<PublicChannel> {
+class _PublicChannel extends State<PublicChannelView> {
   PublicChannelProvider _provider;
 
   AlertDialog dialog(BuildContext context) {
@@ -45,6 +48,16 @@ class _PublicChannel extends State<PublicChannel> {
         FlatButton(
           child: Text('Subscribe'),
           onPressed: () {
+            globals.pusher.subscribe(
+              channelName: channel,
+              event: event,
+              onEvent: (PusherMessage message) {
+                print('event:'+ message.body.toString());
+              },
+              onSubscriptionSucceeded: (PusherMessage message) {
+                print('subscription-succeeded:'+ message.body.toString());
+              },
+            );
             _provider.add(channel, event);
 
             Navigator.of(context).pop();
@@ -77,10 +90,17 @@ class _PublicChannel extends State<PublicChannel> {
           Map<String, Map<String, List>> channelMap = provider.list;
           List<String> channelKeys = channelMap.keys.toList()..sort();
           channelKeys.forEach((String channelName) {
-            list.add(Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(channelName),
-            ));
+            list.add(ListTile(
+                title: Text(channelName),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete),
+                  onPressed: () {
+                    PublicChannel channel = globals.pusher.getChannel(channelName);
+                    channel.unsubscribe();
+                    _provider.remove(channelName);
+                  },
+                ),
+              ));
 
             Map<String, List> eventMap = channelMap[channelName];
             List<String> eventKeys = eventMap.keys.toList()..sort();
@@ -92,7 +112,9 @@ class _PublicChannel extends State<PublicChannel> {
                   trailing: IconButton(
                     icon: Icon(Icons.delete),
                     onPressed: () {
-                      _provider.remove(channelName, event);
+                      PublicChannel channel = globals.pusher.getChannel(channelName);
+                      channel.removeEventHandler(event);
+                      _provider.remove(channelName, event: event);
                     },
                   ),
                 ),

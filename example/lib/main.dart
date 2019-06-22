@@ -107,7 +107,7 @@ class _MyAppState extends State<MyAppWidget> {
               Visibility(
                 visible: _selectedIndex == 1,
                 child: Expanded(
-                  child: PublicChannel(),
+                  child: PublicChannelView(),
                 ),
               ),
               Visibility(

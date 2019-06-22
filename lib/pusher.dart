@@ -1,9 +1,12 @@
-import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:pusher/channels/public.dart';
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/status.dart' as status;
+import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'channels/channel.dart';
 import 'event_handlers/authentication_failure.dart';
 import 'event_handlers/channel_event_handler.dart';
 import 'event_handlers/channel_subscription_succeeded.dart';
@@ -25,122 +28,187 @@ enum PusherConnectionState {
 }
 
 class Pusher {
-  static const MethodChannel _methodChannel = const MethodChannel('flutter.jeroengovers.nl/pusher');
-  static const EventChannel _eventChannel = const EventChannel('flutter.jeroengovers.nl/pusher/event');
+  static const String PUSHER_DOMAIN = 'pusher.com';
+  static const String PRIVATE_PREFIX = 'private-';
+  static const String PRESENCE_PREFIX = 'presence-';
+
+  String _url;
+  String _authorizer;
+  IOWebSocketChannel _webSocketChannel;
   PusherConnectionState _state;
-  Map<String, Map<String, dynamic>> _eventChannelFunctions = {};
+  Map<String, Channel> _channels = {};
+  Map<String, Map<String, Map<String, dynamic>>> _eventChannelFunctions = {};
   String _socketId = '';
 
   Pusher({
     @required String apiKey,
-    String host,
+    String host: 'ws.' + PUSHER_DOMAIN,
     String cluster,
-    bool encrypted,
-    int port,
-    int activityTimeout,
-    int pongTimeout,
-    int maxReconnectionAttempts,
-    int maxReconnectGapInSeconds,
+    bool encrypted: true,
+    int port: 443,
+    int activityTimeout: 120000,
+    int pongTimeout: 30000,
+    int maxReconnectionAttempts: 6,
+    int maxReconnectGapInSeconds: 30,
     String authorizer,
     Function(Pusher) onConnectionStateChange,
     Function(PusherError) onConnectionError,
   }) {
     var args = <String, dynamic>{
       'apiKey': apiKey,
+      'host': host,
     };
+
     if (cluster != null) {
-      args["cluster"] = cluster;
+      host = 'ws-' + cluster + '.' + PUSHER_DOMAIN;
     }
-    if (host != null) {
-      args["host"] = host;
+
+    args["encrypted"] = encrypted;
+    args["port"] = port;
+    _url = 'ws';
+    if (encrypted) {
+      _url += 'wss';
     }
-    if (encrypted != null) {
-      args["encrypted"] = encrypted;
-    }
-    if (port != null) {
-      args["port"] = port;
-    }
-    if (activityTimeout != null) {
-      args["activityTimeout"] = activityTimeout;
-    }
-    if (pongTimeout != null) {
-      args["pongTimeout"] = pongTimeout;
-    }
-    if (maxReconnectionAttempts != null) {
-      args["maxReconnectionAttempts"] = maxReconnectionAttempts;
-    }
-    if (maxReconnectGapInSeconds != null) {
-      args["maxReconnectGapInSeconds"] = maxReconnectGapInSeconds;
-    }
+    _url += '://' + host;
+    _url += ':' + port.toString();
+    _url += '/app/';
+    _url += apiKey;
+    _url += '?client=flutter&protocol=5&version=1';
+
+    //TODO: implement this
+    // args["activityTimeout"] = activityTimeout;
+    // args["pongTimeout"] = pongTimeout;
+    // args["maxReconnectionAttempts"] = maxReconnectionAttempts;
+    // args["maxReconnectGapInSeconds"] = maxReconnectGapInSeconds;
+
     if (authorizer != null) {
-      args["authorizer"] = authorizer;
+      _authorizer = authorizer;
     }
 
     if (onConnectionStateChange != null) {
-      _registerEvent(
-        '_connection',
+      addEventHandler(
+        'pusher:connection',
         'state',
-        'change',
         onConnectionStateChange,
         ConnectionStateChange(),
       );
     }
 
     if (onConnectionError != null) {
-      _registerEvent(
-        '_connection',
-        'error',
+      addEventHandler(
+        'pusher:connection',
         'error',
         onConnectionError,
         ConnectionError(),
       );
     }
 
-    _methodChannel.invokeMethod('create', args);
+    // _methodChannel.invokeMethod('create', args);
 
-    _eventChannel.receiveBroadcastStream().listen((dynamic map) {
-      if (map is Map) {
-        final channelName = map['channel'];
-        final type = map['type'];
-        final event = map['event'];
-        final body = map['body'];
+    // _eventChannel.receiveBroadcastStream().listen((dynamic map) {
+    //   if (map is Map) {
+    //     final channelName = map['channel'];
+    //     final type = map['type'];
+    //     final event = map['event'];
+    //     final body = map['body'];
 
-        print(channelName + '.' + type + '.' + event + ' : ' + body);
+    //     print(channelName + '.' + type + '.' + event + ' : ' + body);
 
-        if (channelName == '_connection' && type == 'state' && event == 'change') {
-          final connectionStateBody = jsonDecode(body);
+    //     if (channelName == 'pusher:connection' && type == 'state' && event == 'change') {
+    //       final connectionStateBody = jsonDecode(body);
 
-          _state = _connectivityStringToState(connectionStateBody['state']);
-          _socketId = connectionStateBody['socketId'];
-        }
+    //       _state = _connectivityStringToState(connectionStateBody['state']);
+    //       _socketId = connectionStateBody['socketId'];
+    //     }
 
-        Map<String, dynamic> eventHandler = _eventChannelFunctions[channelName + '.' + type + '.' + event] ?? null;
+    //     Map<String, dynamic> eventHandler = _eventChannelFunctions[channelName + '.' + type + '.' + event] ?? null;
 
-        if (eventHandler != null) {
-          PusherEventHandler handler = eventHandler['handler'];
-          Function function = eventHandler['function'];
+    //     if (eventHandler != null) {
+    //       PusherEventHandler handler = eventHandler['handler'];
+    //       Function function = eventHandler['function'];
 
-          handler.handle(this, channelName, type, event, body, function);
-        }
-      }
+    //       handler.handle(this, channelName, type, event, body, function);
+    //     }
+    //   }
 
-      return null;
-    });
+    //   return null;
+    // });
   }
 
   void connect() {
-    _methodChannel.invokeMethod('connect');
+    _setState(PusherConnectionState.connecting);
+
+    _webSocketChannel = IOWebSocketChannel.connect(_url);
+    _webSocketChannel.stream.listen(
+      _connectionListener,
+      onError: (error) {
+        _connectionError(0, error.message);
+      },
+      cancelOnError: true,
+    );
   }
 
-  bool isConnected(){
+  void _connectionListener(Object message) {
+    final map = Map<String, dynamic>.from(jsonDecode(message));
+    final String event = map['event'];
+    Map<String, dynamic> data = {};
+
+    if (map.containsKey('data')) {
+      if (!(map['data'] is Map)) {
+        map['data'] = Map<String, dynamic>.from(jsonDecode(map['data']));
+      }
+      data = map['data'];
+    }
+
+    print({
+      'map': map.toString(),
+      'data': data.toString()
+    }.toString());
+
+    switch (event) {
+      case 'pusher:connection_established':
+        _socketId = data['socket_id'];
+
+        _setState(PusherConnectionState.connected);
+        break;
+      case 'pusher:error':
+        _connectionError(data['code'], data['message']);
+        break;
+      default:
+        print('default');
+        triggerHandler(map['channel'], event, data);
+    }
+  }
+
+  void _connectionError(int code, String message) {
+    _setState(PusherConnectionState.disconnected);
+
+    triggerHandler(
+      'pusher:connection',
+      'error',
+      {
+        'code': code,
+        'message': message,
+      },
+    );
+  }
+
+  bool isConnected() {
     return getState() == PusherConnectionState.connected;
   }
 
   void disconnect() {
-    _methodChannel.invokeMethod('disconnect');
+    if (_state == PusherConnectionState.connected) {
+      _setState(PusherConnectionState.disconnecting);
+    }
+
+    _webSocketChannel.sink.close(status.goingAway);
+    _webSocketChannel = null;
+
+    _setState(PusherConnectionState.disconnected);
   }
 
-  String getSocketId(){
+  String getSocketId() {
     return _socketId;
   }
 
@@ -148,38 +216,91 @@ class Pusher {
     return _state;
   }
 
-  PusherConnectionState _connectivityStringToState(dynamic string) {
-    switch (string) {
-      case 'connecting':
-        return PusherConnectionState.connecting;
-      case 'connected':
-        return PusherConnectionState.connected;
-      case 'disconnected':
-        return PusherConnectionState.disconnected;
-      case 'disconnecting':
-        return PusherConnectionState.disconnecting;
-      case 'reconnecting':
-        return PusherConnectionState.reconnecting;
-      case 'reconnectingWhenNetworkBecomesReachable':
-        return PusherConnectionState.reconnectingWhenNetworkBecomesReachable;
+  void _setState(PusherConnectionState state) {
+    _state = state;
+
+    if (state != PusherConnectionState.connected) {
+      _socketId = '';
     }
-    return PusherConnectionState.disconnected;
+
+    triggerHandler(
+      'pusher:connection',
+      'state',
+      {
+        'state': state
+      },
+    );
   }
 
-  void subscribe({
+  void triggerHandler(String channelName, String event, Map data) {
+    Map<String, dynamic> eventHandler = _eventChannelFunctions[channelName][event] ?? null;
+
+    if (eventHandler != null) {
+      PusherEventHandler handler = eventHandler['handler'];
+      Function function = eventHandler['function'];
+
+      handler.handle(this, channelName, event, data, function);
+    }
+
+    return null;
+  }
+
+  PublicChannel subscribe({
     @required String channelName,
     @required dynamic event,
     @required Function(PusherMessage) onEvent,
+    Function(PusherMessage) onStateChange,
     Function(PusherMessage) onSubscriptionSucceeded,
   }) {
-    this._subscribeTo(
-      type: 'subscribe',
-      channelName: channelName,
-      event: event,
-      onEvent: onEvent,
-      onSubscriptionSucceeded: onSubscriptionSucceeded,
-      onAuthenticationFailure: null,
-    );
+    if (channelName.startsWith(PRIVATE_PREFIX)) {
+      throw new Exception('Please use the subscribePrivate method');
+    } else if (channelName.startsWith(PRESENCE_PREFIX)) {
+      throw new Exception('Please use the subscribePresence method');
+    }
+
+    PublicChannel channel = getChannel(channelName);
+    if (channel == null) {
+      channel = PublicChannel(this, _webSocketChannel, channelName);
+      channel.subscribe();
+
+      _channels[channelName] = channel;
+    }
+
+    channel.addEventHandler(event, onEvent);
+
+    if (onStateChange != null) {
+      channel.onStateChange(onStateChange);
+    }
+    if (onSubscriptionSucceeded != null) {
+      channel.onSubscriptionSucceeded(onSubscriptionSucceeded);
+    }
+
+    return channel;
+  }
+
+  PublicChannel getChannel(String channelName) {
+    if (channelName.startsWith(PRIVATE_PREFIX)) {
+      throw new Exception('Please use the getPrivateChannel method');
+    } else if (channelName.startsWith(PRESENCE_PREFIX)) {
+      throw new Exception('Please use the getPresenceChannel method');
+    }
+
+    if (_channels.containsKey(channelName)) {
+      return _channels[channelName];
+    }
+
+    return null;
+  }
+
+  void unsubscribe(String channelName) {
+    _channels.remove(channelName);
+    _eventChannelFunctions.remove(channelName);
+    _webSocketChannel.sink.add(jsonEncode({
+      'event': 'pusher:unsubscribe',
+      'data': {
+        'channel': channelName
+      }
+    }));
   }
 
   void subscribePrivate({
@@ -190,7 +311,7 @@ class Pusher {
     Function(PusherMessage) onAuthenticationFailure,
   }) {
     this._subscribeTo(
-      type: 'subscribePrivate',
+      type: 'subscribe-private',
       channelName: channelName,
       event: event,
       onEvent: onEvent,
@@ -206,10 +327,10 @@ class Pusher {
     Function(PusherMessage) onSubscriptionSucceeded,
     Function(PusherMessage) onAuthenticationFailure,
   }) {
-    _methodChannel.invokeMethod('subscribePresence', {
-      "channel": channelName,
-      "event": event
-    });
+    // _methodChannel.invokeMethod('subscribePresence', {
+    //   "channel": channelName,
+    //   "event": event
+    // });
   }
 
   void _subscribeTo({
@@ -229,44 +350,52 @@ class Pusher {
     }
 
     event.forEach((dynamic event) {
-      _methodChannel.invokeMethod(
-        type,
-        {
-          "channel": channelName,
-          "event": event,
-        },
-      );
+      _webSocketChannel.sink.add(jsonEncode({
+        'event': 'pusher:subscribe',
+        'data': {
+          'channel': channelName
+        }
+      }));
 
-      _registerEvent(channelName, 'event', event, onEvent, ChannelEventHandler());
+      addEventHandler(channelName, event, onEvent, ChannelEventHandler());
 
       if (onSubscriptionSucceeded != null) {
-        _registerEvent(channelName, 'subscription-succeeded', event, onSubscriptionSucceeded, ChannelSubscriptionSucceeded());
+        addEventHandler(channelName, 'pusher_internal:subscription_succeeded', onSubscriptionSucceeded, ChannelSubscriptionSucceeded());
       }
 
       if (onAuthenticationFailure != null) {
-        _registerEvent(channelName, 'subscription-failure', event, onAuthenticationFailure, AuthenticationFailure());
+        addEventHandler(channelName, 'subscription-failure', onAuthenticationFailure, AuthenticationFailure());
       }
     });
   }
 
+  //TODO: trigger maken
   void trigger(String channelName, String event, String data) {
-    _methodChannel.invokeMethod('trigger', {
-      "channel": channelName,
-      "event": event,
-      "data": data
-    });
+    // _methodChannel.invokeMethod('trigger', {
+    //   "channel": channelName,
+    //   "event": event,
+    //   "data": data
+    // });
   }
 
-  void _registerEvent(String channelName, String type, String event, Function function, PusherEventHandler handler) {
-    _eventChannelFunctions[channelName + '.' + type + '.' + event] = {
+  void addEventHandler(String channelName, String event, Function function, PusherEventHandler handler) {
+    if (!_eventChannelFunctions.containsKey(channelName)) {
+      _eventChannelFunctions[channelName] = {};
+    }
+
+    _eventChannelFunctions[channelName][event] = {
       'function': function,
       'handler': handler,
     };
   }
+
+  void removeEventHandler(String channelName, String event) {
+    _eventChannelFunctions[channelName]?.remove(event);
+  }
 }
 
 class PusherError {
-  String code;
+  int code;
   String message;
 
   PusherError(this.code, this.message);
@@ -284,7 +413,7 @@ class PusherError {
 class PusherMessage {
   final String channelName;
   final String eventName;
-  final String body;
+  final Map body;
 
   PusherMessage(this.channelName, this.eventName, this.body);
 }

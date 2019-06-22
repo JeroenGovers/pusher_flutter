@@ -5,11 +5,10 @@ class ChannelSubscriptionSucceeded implements PusherEventHandler {
   void handle(
     Pusher pusher,
     String channelName,
-    String type,
     String event,
-    String body,
+    Map body,
     Function function,
   ) {
-    function(channelName, type, body);
+    function(new PusherMessage(channelName, event, body));
   }
 }

@@ -1,12 +1,12 @@
 //TODO: explain file
 
-String apiKey;
-String host;
+String apiKey = 'myKey';
+String host = '192.168.123.244';
 String cluster;
-bool encrypted;
-int port;
+bool encrypted = false;
+int port = 6001;
 int activityTimeout;
 int pongTimeout;
 int maxReconnectionAttempts;
 int maxReconnectGapInSeconds;
-String authorizer;
+String authorizer = 'http://192.168.123.244:8000/api/authorize';

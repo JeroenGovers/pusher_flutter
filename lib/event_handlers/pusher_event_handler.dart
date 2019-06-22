@@ -4,9 +4,8 @@ abstract class PusherEventHandler {
   void handle(
     Pusher pusher,
     String channelName,
-    String type,
     String event,
-    String body,
+    Map body,
     Function function,
   );
 }
