@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:pusher/authorizer.dart';
 import 'package:pusher/pusher.dart';
+import 'authorizer.dart';
 import 'change_notifiers/pusher_state.dart';
 import 'change_notifiers/connection_log.dart';
 import 'datetime.dart';
@@ -27,6 +29,8 @@ class _Connection extends State<Connection> {
     final state = Provider.of<PusherStateNotifier>(context);
     final log = Provider.of<ConnectionLogNotifier>(context);
 
+    PusherAuthorizer pusherAuthorizer = new Authorizer(connection_values.authorizer ?? connection_initials.authorizer);
+
     globals.pusher = new Pusher(
       apiKey: connection_values.apiKey ?? connection_initials.apiKey,
       host: connection_values.host ?? connection_initials.host,
@@ -37,7 +41,7 @@ class _Connection extends State<Connection> {
       pongTimeout: connection_values.pongTimeout ?? connection_initials.pongTimeout,
       maxReconnectionAttempts: connection_values.maxReconnectionAttempts ?? connection_initials.maxReconnectionAttempts,
       maxReconnectGapInSeconds: connection_values.maxReconnectGapInSeconds ?? connection_initials.maxReconnectGapInSeconds,
-      authorizer: connection_values.authorizer ?? connection_initials.authorizer,
+      authorizer: pusherAuthorizer,
       onConnectionStateChange: (Pusher pusher) {
         state.state = pusher.getState();
         log.add('state', pusher.getState().toString());

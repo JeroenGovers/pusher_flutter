@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:pusher/pusher.dart';
 import 'package:pusher_example/public_channel.dart';
 
+import 'change_notifiers/private_channel.dart';
 import 'change_notifiers/public_channel.dart';
 import 'change_notifiers/pusher_state.dart';
 import 'change_notifiers/connection_log.dart';
 import 'connection.dart';
+import 'private_channel.dart';
 
 void main() => runApp(MyApp());
 
@@ -89,6 +91,7 @@ class _MyAppState extends State<MyAppWidget> {
         ChangeNotifierProvider(builder: (context) => PusherStateNotifier()),
         ChangeNotifierProvider(builder: (context) => ConnectionLogNotifier()),
         ChangeNotifierProvider(builder: (context) => PublicChannelProvider()),
+        ChangeNotifierProvider(builder: (context) => PrivateChannelProvider()),
       ],
       child: Scaffold(
         appBar: AppBar(
@@ -112,7 +115,9 @@ class _MyAppState extends State<MyAppWidget> {
               ),
               Visibility(
                 visible: _selectedIndex == 2,
-                child: Text("error $_lastError"),
+                child: Expanded(
+                  child: PrivateChannelView(),
+                ),
               ),
               Visibility(
                 visible: _selectedIndex == 3,
