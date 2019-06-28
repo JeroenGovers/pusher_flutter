@@ -16,7 +16,7 @@ import '../pusher.dart';
 class ChannelManager {
   final Pusher _pusher;
   final String _url;
-  final PusherAuthorizer authorizer;
+  final PusherAuthorizer _authorizer;
   PusherConnectionState _state;
   String _socketId;
   IOWebSocketChannel _webSocketChannel;
@@ -24,7 +24,7 @@ class ChannelManager {
   Map<String, Channel> _channels = {};
   Map<String, PusherChannelState> _channelStates = {};
 
-  ChannelManager(this._pusher, this._url, this.authorizer);
+  ChannelManager(this._pusher, this._url, this._authorizer);
 
   void connect() {
     _setState(PusherConnectionState.connecting);
@@ -147,17 +147,13 @@ class ChannelManager {
     );
   }
 
-  Future<Channel> subscribe(String channelName, dynamic event, Function(PusherMessage) onEvent, Function(PusherMessage) onStateChange, Function(PusherMessage) onSubscriptionSucceeded, {Function(PusherMessage) onAuthenticationFailure}) async {
+  Channel subscribe(String channelName, dynamic event, Function(PusherMessage) onEvent, Function(PusherMessage) onStateChange, Function(PusherMessage) onSubscriptionSucceeded, {Function(PusherMessage) onAuthenticationFailure}) {
     Channel channel = getChannel(channelName);
     if (channel == null) {
-      bool authorize = false;
-
       if (channelName.startsWith(Pusher.PRIVATE_PREFIX)) {
         channel = PrivateChannel(channelName, this);
-        authorize = true;
       } else if (channelName.startsWith(Pusher.PRESENCE_PREFIX)) {
         channel = PresenceChannel(channelName, this);
-        authorize = true;
       } else {
         channel = PublicChannel(channelName, this);
       }
@@ -165,30 +161,7 @@ class ChannelManager {
       _channels[channelName] = channel;
       _channelStates[channelName] = PusherChannelState.initial;
 
-      Map webSocketChannelData = {
-        'channel': channelName
-      };
-
-      if (authorize) {
-        _setChannelState(channelName, PusherChannelState.authorizing);
-
-        String webSocketChannelKey = await authorizer.authorize(channelName, _socketId);
-        if(webSocketChannelKey.isEmpty){
-          _setChannelState(channelName, PusherChannelState.not_authorized);
-
-          return null;
-        }
-        webSocketChannelData['key'] = webSocketChannelKey;
-
-        _setChannelState(channelName, PusherChannelState.authorized);
-      }
-
-      _webSocketChannel.sink.add(jsonEncode({
-        'event': 'pusher:subscribe',
-        'data': webSocketChannelData
-      }));
-
-      _setChannelState(channelName, PusherChannelState.subscribe_sent);
+      _subscribeToChannel(channelName);
     }
 
     channel.addEventHandler(event, onEvent);
@@ -201,6 +174,35 @@ class ChannelManager {
     }
 
     return channel;
+  }
+
+  void _subscribeToChannel(String channelName) async {
+    bool authorize = channelName.startsWith(Pusher.PRIVATE_PREFIX) || channelName.startsWith(Pusher.PRESENCE_PREFIX);
+
+    Map webSocketChannelData = {
+      'channel': channelName
+    };
+
+    if (authorize) {
+      _setChannelState(channelName, PusherChannelState.authorizing);
+
+      String webSocketChannelAuth = await _authorizer.authorize(channelName, _socketId);
+      if (webSocketChannelAuth.isEmpty) {
+        _setChannelState(channelName, PusherChannelState.not_authorized);
+
+        return null;
+      }
+      webSocketChannelData['auth'] = webSocketChannelAuth;
+
+      _setChannelState(channelName, PusherChannelState.authorized);
+    }
+
+    _webSocketChannel.sink.add(jsonEncode({
+      'event': 'pusher:subscribe',
+      'data': webSocketChannelData
+    }));
+
+    _setChannelState(channelName, PusherChannelState.subscribe_sent);
   }
 
   Channel getChannel(String channelName) {

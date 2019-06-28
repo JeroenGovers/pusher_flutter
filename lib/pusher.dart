@@ -135,7 +135,7 @@ class Pusher {
     }
   }
 
-  Future<PublicChannel> subscribe({
+  PublicChannel subscribe({
     @required String channelName,
     @required dynamic event,
     @required Function(PusherMessage) onEvent,
@@ -147,7 +147,7 @@ class Pusher {
     return _channelManager.subscribe(channelName, event, onEvent, onStateChange, onSubscriptionSucceeded);
   }
 
-  Future<PrivateChannel> subscribePrivate({
+  PrivateChannel subscribePrivate({
     @required String channelName,
     @required dynamic event,
     @required Function(PusherMessage) onEvent,
@@ -161,7 +161,7 @@ class Pusher {
     return _channelManager.subscribe(channelName, event, onEvent, onStateChange, onSubscriptionSucceeded, onAuthenticationFailure: onAuthenticationFailure);
   }
 
-  Future<PresenceChannel> subscribePresence({
+  PresenceChannel subscribePresence({
     @required String channelName,
     @required dynamic event,
     @required Function(PusherMessage) onEvent,
