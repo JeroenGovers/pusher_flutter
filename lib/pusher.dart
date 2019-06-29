@@ -155,7 +155,6 @@ class Pusher {
     Function(PusherMessage) onSubscriptionSucceeded,
     Function(PusherMessage) onAuthenticationFailure,
   }) {
-    //EXITED: auth inbouwen
     _checkPrivateChannelName(channelName, 'subscribe', 'subscribePresence');
 
     return _channelManager.subscribe(channelName, event, onEvent, onStateChange, onSubscriptionSucceeded, onAuthenticationFailure: onAuthenticationFailure);

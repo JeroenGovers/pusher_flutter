@@ -7,6 +7,7 @@ import 'package:pusher_example/channel.dart';
 import 'global_values/pusher.dart' as globals;
 
 import 'change_notifiers/public_channel.dart';
+import 'change_notifiers/log.dart';
 
 class PublicChannelView extends StatefulWidget {
   PublicChannelView({Key key}) : super(key: key);
@@ -20,6 +21,7 @@ class _PublicChannel extends State<PublicChannelView> with Channel {
 
   @override
   Widget build(BuildContext context) {
+    final log = Provider.of<LogNotifier>(context);
     _provider = Provider.of<PublicChannelProvider>(context);
 
     return Scaffold(
@@ -51,11 +53,14 @@ class _PublicChannel extends State<PublicChannelView> with Channel {
                   channelName: channel,
                   event: event,
                   onEvent: (PusherMessage message) {
-                    print('event:' + message.body.toString());
+                    log.add('event', channel +'.'+ event +': '+ message.body.toString());
                   },
                   onSubscriptionSucceeded: (PusherMessage message) {
-                    print('subscription-succeeded:' + message.body.toString());
+                    log.add('event', channel +'.subscription-succeeded: '+ message.body.toString());
                   },
+                  onStateChange: (PusherMessage message){
+                    log.add('state', channel +'.state: '+ message.body.toString());
+                  }
                 );
                 _provider.add(channel, event);
               });

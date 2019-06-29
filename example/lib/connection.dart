@@ -5,7 +5,7 @@ import 'package:pusher/authorizer.dart';
 import 'package:pusher/pusher.dart';
 import 'authorizer.dart';
 import 'change_notifiers/pusher_state.dart';
-import 'change_notifiers/connection_log.dart';
+import 'change_notifiers/log.dart';
 import 'datetime.dart';
 import 'global_values/pusher.dart' as globals;
 import 'global_values/connection.dart' as connection_values;
@@ -27,7 +27,7 @@ class _Connection extends State<Connection> {
 
   void connect() {
     final state = Provider.of<PusherStateNotifier>(context);
-    final log = Provider.of<ConnectionLogNotifier>(context);
+    final log = Provider.of<LogNotifier>(context);
 
     PusherAuthorizer pusherAuthorizer = new Authorizer(connection_values.authorizer ?? connection_initials.authorizer);
 
@@ -104,29 +104,7 @@ class _Connection extends State<Connection> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: TabBar(
-          unselectedLabelColor: Colors.black87,
-          labelColor: Colors.black,
-          tabs: <Widget>[
-            Tab(
-              text: 'Settings',
-            ),
-            Tab(
-              text: 'Log',
-            ),
-          ],
-        ),
-        body: TabBarView(
-          children: <Widget>[
-            settings(),
-            log(),
-          ],
-        ),
-      ),
-    );
+    return settings();
   }
 
   Widget settings() {
@@ -136,6 +114,37 @@ class _Connection extends State<Connection> {
           child: ListView(
             padding: EdgeInsets.all(8.0),
             children: <Widget>[
+              Card(
+                margin: EdgeInsets.fromLTRB(0, 0, 0, 8),
+                child: ListTile(
+                  title: Text('State'),
+                  subtitle: Consumer<PusherStateNotifier>(
+                    builder: (context, pusherState, _) {
+                      return Text(pusherState.state.toString());
+                    },
+                  ),
+                ),
+              ),
+              Card(
+                margin: EdgeInsets.all(0),
+                child: ListTile(
+                  title: Text('SocketId'),
+                  subtitle: Consumer<PusherStateNotifier>(
+                    builder: (context, state, _) {
+                      String socketId = '';
+                      if (globals.pusher != null) {
+                        socketId = globals.pusher.getSocketId();
+                      }
+
+                      if (socketId == '') {
+                        socketId = '-';
+                      }
+
+                      return Text(socketId);
+                    },
+                  ),
+                ),
+              ),
               TextField(
                 controller: initialValue(connection_values.apiKey ?? connection_initials.apiKey),
                 decoration: InputDecoration(
@@ -253,7 +262,7 @@ class _Connection extends State<Connection> {
               ),
               TextField(
                 controller: initialValue(connection_values.authorizer ?? connection_initials.authorizer),
-                decoration: InputDecoration(labelText: 'authorizer'),
+                decoration: InputDecoration(labelText: 'authorizer url (see authorizer.dart for more details)'),
                 keyboardType: TextInputType.url,
                 onChanged: (String value) {
                   connection_values.authorizer = value;
@@ -269,86 +278,6 @@ class _Connection extends State<Connection> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget log() {
-    return Padding(
-      padding: EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Card(
-            child: ListTile(
-              title: Text('State'),
-              subtitle: Consumer<PusherStateNotifier>(
-                builder: (context, pusherState, _) {
-                  return Text(pusherState.state.toString());
-                },
-              ),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              title: Text('SocketId'),
-              subtitle: Consumer<PusherStateNotifier>(
-                builder: (context, state, _) {
-                  String socketId = '';
-                  if (globals.pusher != null) {
-                    socketId = globals.pusher.getSocketId();
-                  }
-
-                  if (socketId == '') {
-                    socketId = '-';
-                  }
-
-                  return Text(socketId);
-                },
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: 8,
-            ),
-            child: Text('Messages'),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: 8,
-              ),
-              child: Consumer<ConnectionLogNotifier>(
-                builder: (context, ConnectionLogNotifier log, _) {
-                  List <Widget>list = [];
-
-                  log.list.forEach((message) {
-                    list.add(
-                      Card(
-                        child: ListTile(
-                          leading: Icon(
-                            Icons.message,
-                            size: 24,
-                          ),
-                          title: Text(message['message']),
-                          subtitle: DateTimeFormatter(message['datetime']),
-                          dense: true,
-                        ),
-                      )
-                    );
-                  });
-
-                  return ListView(
-                    children: list,
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

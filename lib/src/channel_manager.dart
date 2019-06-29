@@ -113,13 +113,12 @@ class ChannelManager {
     return null;
   }
 
-  //TODO: trigger maken
   void trigger(String channelName, String event, String data) {
-    // _methodChannel.invokeMethod('trigger', {
-    //   "channel": channelName,
-    //   "event": event,
-    //   "data": data
-    // });
+    _webSocketChannel.sink.add(jsonEncode({
+      'channel': channelName,
+      'event': event,
+      'data': data,
+    }));
   }
 
   PusherConnectionState getState() {

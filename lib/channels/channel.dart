@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:meta/meta.dart';
 import 'package:pusher/event_handlers/channel_event_handler.dart';
 import 'package:pusher/event_handlers/channel_state_change.dart';
 import 'package:pusher/event_handlers/channel_subscription_succeeded.dart';
@@ -23,6 +24,15 @@ abstract class Channel {
   final String _channelName;
 
   Channel(this._channelName, this._channelManager);
+
+  String getName(){
+    return _channelName;
+  }
+
+  @protected
+  ChannelManager getChannelManager(){
+    return _channelManager;
+  }
 
   bool isSubscribed(){
     return getState == PusherChannelState.subscribed;

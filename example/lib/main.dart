@@ -6,8 +6,9 @@ import 'package:pusher_example/public_channel.dart';
 import 'change_notifiers/private_channel.dart';
 import 'change_notifiers/public_channel.dart';
 import 'change_notifiers/pusher_state.dart';
-import 'change_notifiers/connection_log.dart';
+import 'change_notifiers/log.dart';
 import 'connection.dart';
+import 'log.dart';
 import 'private_channel.dart';
 
 void main() => runApp(MyApp());
@@ -89,7 +90,7 @@ class _MyAppState extends State<MyAppWidget> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(builder: (context) => PusherStateNotifier()),
-        ChangeNotifierProvider(builder: (context) => ConnectionLogNotifier()),
+        ChangeNotifierProvider(builder: (context) => LogNotifier()),
         ChangeNotifierProvider(builder: (context) => PublicChannelProvider()),
         ChangeNotifierProvider(builder: (context) => PrivateChannelProvider()),
       ],
@@ -125,14 +126,8 @@ class _MyAppState extends State<MyAppWidget> {
               ),
               Visibility(
                 visible: _selectedIndex == 4,
-                child: MaterialButton(
-                  child: Text("Send data"),
-                  onPressed: () {
-                    // pusher.trigger(
-                    //     'private-sprinklers',
-                    //     'client-updateSprinkler',
-                    //     '{"id":1,"name":"Sproeiers3","status":true}');
-                  },
+                child: Expanded(
+                  child: Log(),
                 ),
               ),
             ],
@@ -168,13 +163,8 @@ class _MyAppState extends State<MyAppWidget> {
             return BottomNavigationBar(
               items: [
                 BottomNavigationBarItem(
-                  icon: Consumer<ConnectionLogNotifier>(
-                    builder: (BuildContext context, ConnectionLogNotifier log, Widget child) {
-                      return IconIndicator(
-                        connectionIcon,
-                        number: log.newLength,
-                      );
-                    },
+                  icon: IconIndicator(
+                    connectionIcon,
                   ),
                   title: Text('Connection'),
                 ),
@@ -218,15 +208,16 @@ class _MyAppState extends State<MyAppWidget> {
                   ),
                 ),
                 BottomNavigationBarItem(
-                  icon: IconIndicator(
-                    Icons.send,
-                    disabled: !active,
+                  icon: Consumer<LogNotifier>(
+                    builder: (BuildContext context, LogNotifier log, Widget child) {
+                      return IconIndicator(
+                        Icons.format_align_left,
+                        number: log.newLength,
+                      );
+                    },
                   ),
                   title: Text(
-                    'Trigger',
-                    style: TextStyle(
-                      color: buttonColor,
-                    ),
+                    'Log',
                   ),
                 ),
               ],
@@ -235,7 +226,7 @@ class _MyAppState extends State<MyAppWidget> {
               selectedItemColor: Colors.amber[800],
               type: BottomNavigationBarType.fixed,
               onTap: (int index) {
-                if (index == 0 || active) {
+                if (index == 0 || index == 4 || active) {
                   setState(() {
                     _selectedIndex = index;
                   });
