@@ -28,9 +28,36 @@ class _PrivateChannel extends State<PrivateChannelView> with Channel {
             'privateChannel',
             provider,
             (String channelName) {
-              PrivateChannel channel = globals.pusher.getPrivateChannel(channelName);
-              channel.unsubscribe();
-              _provider.remove(channelName);
+              return ListTile(
+                title: Text(channelName),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    IconButton(
+                      icon: Icon(Icons.send),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            return triggerDialog(context, channelName + ' trigger', (String eventName, String json) {
+                              PrivateChannel channel = globals.pusher.getPrivateChannel(channelName);
+                              channel.trigger(eventName, json);
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.delete),
+                      onPressed: () {
+                        PrivateChannel channel = globals.pusher.getPrivateChannel(channelName);
+                        channel.unsubscribe();
+                        _provider.remove(channelName);
+                      },
+                    ),
+                  ],
+                ),
+              );
             },
             (String channelName, String event) {
               PrivateChannel channel = globals.pusher.getPrivateChannel(channelName);
@@ -45,7 +72,7 @@ class _PrivateChannel extends State<PrivateChannelView> with Channel {
           showDialog(
             context: context,
             builder: (BuildContext context) {
-              return dialog(context, 'Private channel', (channel, event) {
+              return subscribeDialog(context, 'Private channel', (channel, event) {
                 globals.pusher.subscribePrivate(
                   channelName: channel,
                   event: event,

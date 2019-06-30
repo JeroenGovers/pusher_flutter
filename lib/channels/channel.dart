@@ -35,7 +35,7 @@ abstract class Channel {
   }
 
   bool isSubscribed(){
-    return getState == PusherChannelState.subscribed;
+    return getState() == PusherChannelState.subscribed;
   }
 
   PusherChannelState getState(){

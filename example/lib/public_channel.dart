@@ -48,7 +48,7 @@ class _PublicChannel extends State<PublicChannelView> with Channel {
           showDialog(
             context: context,
             builder: (BuildContext context) {
-              return dialog(context, 'Public channel', (channel, event) {
+              return subscribeDialog(context, 'Public channel', (channel, event) {
                 globals.pusher.subscribe(
                   channelName: channel,
                   event: event,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pusher_example/change_notifiers/channel.dart' as changeNotifier;
 
 class Channel {
-  Widget channelListView(String title, changeNotifier.Channel provider, Function deleteChannel(String channelName), Function deleteEvent(String channelName, String event)) {
+  Widget channelListView(String title, changeNotifier.Channel provider, ListTile channelBuilder(String channelName), Function deleteEvent(String channelName, String event)) {
     if (provider.list.length == 0) {
       return Center(
         child: Text(title),
@@ -13,15 +13,7 @@ class Channel {
     Map<String, Map<String, List>> channelMap = provider.list;
     List<String> channelKeys = channelMap.keys.toList()..sort();
     channelKeys.forEach((String channelName) {
-      list.add(ListTile(
-        title: Text(channelName),
-        trailing: IconButton(
-          icon: Icon(Icons.delete),
-          onPressed: () {
-            deleteChannel(channelName);
-          },
-        ),
-      ));
+      list.add(channelBuilder(channelName));
 
       Map<String, List> eventMap = channelMap[channelName];
       List<String> eventKeys = eventMap.keys.toList()..sort();
@@ -47,7 +39,7 @@ class Channel {
     );
   }
 
-  AlertDialog dialog(BuildContext context, String title, Function onSubscribe(String channelName, String event)) {
+  AlertDialog subscribeDialog(BuildContext context, String title, Function onSubscribe(String channelName, String event)) {
     String channel;
     String event;
 
@@ -79,6 +71,52 @@ class Channel {
           child: Text('Subscribe'),
           onPressed: () {
             onSubscribe(channel, event);
+
+            Navigator.of(context).pop();
+          },
+        ),
+        FlatButton(
+          child: Text('Cancel'),
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+        ),
+      ],
+    );
+  }
+
+  AlertDialog triggerDialog(BuildContext context, String title, Function onTrigger(String eventName, String json)) {
+    String eventName;
+    String json;
+
+    return AlertDialog(
+      title: Text(title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          TextField(
+            decoration: InputDecoration(
+              labelText: 'EventName *',
+            ),
+            onChanged: (value) {
+              eventName = value;
+            },
+          ),
+          TextField(
+            decoration: InputDecoration(
+              labelText: 'JSON *',
+            ),
+            onChanged: (value) {
+              json = value;
+            },
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        FlatButton(
+          child: Text('Subscribe'),
+          onPressed: () {
+            onTrigger(eventName, json);
 
             Navigator.of(context).pop();
           },
